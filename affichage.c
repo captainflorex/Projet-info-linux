@@ -34,17 +34,17 @@ void effacerEcran(void) {
 void afficherMenuPrincipal(void) {
     effacerEcran();
     
-    changerCouleur(COULEUR_VERT);
+    changerCouleur(COULEUR_VIOLET);
     printf("\n");
     printf("    ╔══════════════════════════════════════════════════════════╗\n");
     printf("    ║                                                          ║\n");
-    printf("    ║            ████████  ██████ ████████                     ║\n");
-    printf("    ║            ██       ██      ██                           ║\n");
-    printf("    ║            ████████ ██      ████████                     ║\n");
-    printf("    ║            ██       ██      ██                           ║\n");
-    printf("    ║            ████████  ██████ ████████                     ║\n");
+    printf("    ║               ████████  ███████ ████████                 ║\n");
+    printf("    ║               ██       ██       ██                       ║\n");
+    printf("    ║               ███████  ██       ███████                  ║\n");
+    printf("    ║               ██       ██       ██                       ║\n");
+    printf("    ║               ████████  ███████ ████████                 ║\n");
     printf("    ║                                                          ║\n");
-    printf("    ║                  H E R O E S                             ║\n");
+    printf("    ║                       H E R O E S                        ║\n");
     printf("    ║                                                          ║\n");
     printf("    ╚══════════════════════════════════════════════════════════╝\n\n");
     
@@ -181,7 +181,7 @@ void afficherRegles(void) {
 
     changerCouleur(COULEUR_CYAN);
     printf("╔═══════════════════════════════════════════════════════════════════════════════╗\n");
-    printf("║               Appuyez sur une touche pour revenir au menu...                 ║\n");
+    printf("║               Appuyez sur une touche pour revenir au menu...                  ║\n");
     printf("╚═══════════════════════════════════════════════════════════════════════════════╝\n");
     changerCouleur(COULEUR_RESET);
 }
@@ -197,7 +197,7 @@ void afficherNiveauJeu(Partie* partie, int curseurX, int curseurY, int selectX, 
     printf("║");
     changerCouleur(COULEUR_JAUNE);
     // On laisse la largeur d'origine
-    printf("                    ECE HEROES - NIVEAU %d                                    ", partie->niveau);
+    printf("                              ECE HEROES - NIVEAU %d                                 ", partie->niveau);
     changerCouleur(COULEUR_VERT);
     printf("║\n");
     printf("╚════════════════════════════════════════════════════════════════════════════════════╝\n\n");
@@ -292,7 +292,7 @@ void afficherStats(Partie* partie) {
     changerCouleur(COULEUR_ROUGE);
     printf("%d / %d", partie->vies, NB_VIES_INITIAL);
     changerCouleur(COULEUR_JAUNE);
-    printf("         ║");
+    printf("        ║");
 
     allerA(posX, posY++);
     printf("╠═════════════════════╣");
@@ -304,7 +304,7 @@ void afficherStats(Partie* partie) {
     changerCouleur(COULEUR_CYAN);
     printf("%02d:%02d", partie->temps_restant / 60, partie->temps_restant % 60);
     changerCouleur(COULEUR_JAUNE);
-    printf("         ║");
+    printf("       ║");
 
     allerA(posX, posY++);
     printf("║");
@@ -323,7 +323,7 @@ void afficherStats(Partie* partie) {
     changerCouleur(COULEUR_VERT);
     printf("     CONTRAT     ");
     changerCouleur(COULEUR_JAUNE);
-    printf("║");
+    printf("    ║");
 
     allerA(posX, posY++);
     printf("╠═════════════════════╣");
@@ -342,7 +342,7 @@ void afficherStats(Partie* partie) {
                partie->contrat[i]);
 
         changerCouleur(COULEUR_JAUNE);
-        printf("     ║");
+        printf("    ║");
     }
 
     allerA(posX, posY++);
@@ -354,12 +354,12 @@ void afficherStats(Partie* partie) {
 // Affiche les contrôles
 void afficherControles(void) {
     changerCouleur(COULEUR_VERT);
-    printf("  ╔════════════════════════════════════════════════════════════════════════════════════╗\n");
+    printf(" \n  ╔════════════════════════════════════════════════════════════════════════════════════╗\n");
     printf("  ║ ");
     changerCouleur(COULEUR_JAUNE);
     printf("CONTRÔLES");
     changerCouleur(COULEUR_VERT);
-    printf("                                                                  ║\n");
+    printf("                                                                          ║\n");
     printf("  ║ ");
     changerCouleur(COULEUR_BLANC);
     printf("Déplacement: ");
@@ -378,7 +378,7 @@ void afficherControles(void) {
     changerCouleur(COULEUR_CYAN);
     printf("[ECHAP]");
     changerCouleur(COULEUR_VERT);
-    printf("  ║\n");
+    printf("   ║\n");
     printf("  ╚════════════════════════════════════════════════════════════════════════════════════╝\n\n");
 }
 
