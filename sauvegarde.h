@@ -8,4 +8,10 @@ int sauvegarderPartie(char* pseudo, int niveau, int vies);
 
 int chargerPartie(char* pseudo, int* niveau, int* vies);
 
+typedef struct {
+    char pseudo[50];
+    int niveau;
+    int vies;
+} Enregistrement;
+
 #endif // SAUVEGARDE_H
