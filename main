@@ -9,32 +9,11 @@
 #include "affichage.h"
 #include "moteur.h"
 #include "sauvegarde.h"
+#include "menupause.h"
 
 // Prototypes locaux
-void saisirPseudo(char* buffer, int longueurMax);
 int jouerNiveau(Partie* partie);
 void lancerJeu(Partie* partie);
-
-// === FONCTION DE SAISIE SÉCURISÉE ===
-// Source : Assistant IA (Alternative sécurisée à scanf pour l'interface graphique)
-// Rôle : Permet de taper son pseudo sans faire planter l'affichage graphique.
-// Entrée : Le tableau où stocker le texte (buffer) et sa taille max.
-// Sortie : Aucune (modifie directement le buffer).
-void saisirPseudo(char* buffer, int longueurMax) {
-    int i = 0;
-    char c;
-    memset(buffer, 0, longueurMax); // On vide le buffer
-    while (1) {
-        c = getch(); // Lit une touche sans attendre "Entrée"
-        if (c == 13) break; // Touche Entrée validée
-        else if (c == 8) { // Touche Retour Arrière
-            if (i > 0) { i--; printf("\b \b"); buffer[i] = '\0'; }
-        }
-        else if (i < longueurMax - 1 && c >= 32 && c <= 126) {
-            buffer[i] = c; i++; printf("%c", c);
-        }
-    }
-}
 
 // === MAIN ===
 // Rôle : Initialise le programme et gère la boucle du Menu Principal.
@@ -43,8 +22,6 @@ int main() {
     int continuer = 1;
     char pseudo[50];
 
-    // Configure la console pour afficher les accents et émojis (UTF-8)
-    // Source : Assistant IA (Configuration Windows)
     system("chcp 65001 > nul");
 
     while (continuer) {
@@ -52,56 +29,33 @@ int main() {
         char touche = getch();
 
         switch (touche) {
-            case '1': // Afficher les règles
-                afficherRegles();
-                getch();
-                break;
-
-            case '2': // Nouvelle Partie
-                initialiserPartie(&partie);
-                lancerJeu(&partie);
-                break;
-
-            case '3': // Charger une partie
+            case '1': afficherRegles(); getch(); break;
+            case '2': initialiserPartie(&partie); lancerJeu(&partie); break;
+            case '3': // CHARGER
                 effacerEcran();
             changerCouleur(COULEUR_CYAN);
-            printf("\n  >> Entrez votre pseudo pour charger : ");
+            printf("\n  >> Entrez votre pseudo : ");
             changerCouleur(COULEUR_BLANC);
+            saisirPseudo(pseudo, 50); // Appel depuis affichage.c
 
-            saisirPseudo(pseudo, 50);
-
-            // 1. On essaie d'abord de charger une sauvegarde "en cours" (complète)
             if (chargerPartieComplete(pseudo, &partie)) {
-                printf("\n\n  >> Partie suspendue retrouvee ! (Niveau %d, %ds restants)",
-                       partie.niveau, partie.temps_restant);
+                printf("\n\n  >> Partie en cours retrouvee !");
                 Sleep(1500);
-                // Pas besoin de genererNiveau, car 'partie' contient déjà le plateau sauvegardé !
                 lancerJeu(&partie);
             }
-            // 2. Sinon, on cherche une sauvegarde classique (début de niveau)
             else if (chargerPartie(pseudo, &partie.niveau, &partie.vies)) {
-                printf("\n\n  >> Progression retrouvee ! (Niveau %d, %d Vies)",
-                       partie.niveau, partie.vies);
+                printf("\n\n  >> Progression retrouvee !");
                 Sleep(1500);
                 genererNiveau(&partie, partie.niveau);
                 lancerJeu(&partie);
-            }
-            else {
-                printf("\n\n  >> Aucune sauvegarde trouvée pour ce pseudo.");
+            } else {
+                printf("\n\n  >> Aucune sauvegarde trouvée.");
                 Sleep(2000);
             }
             break;
-
-            case '4': // Quitter
-                continuer = 0;
-                break;
+            case '4': continuer = 0; break;
         }
     }
-
-    effacerEcran();
-    changerCouleur(COULEUR_VERT);
-    printf("\n\n    Merci d'avoir joué à ECE HEROES !\n\n");
-    changerCouleur(COULEUR_RESET);
     return 0;
 }
 
@@ -181,142 +135,145 @@ void lancerJeu(Partie* partie) {
 }
 
 // === BOUCLE DE JEU (TEMPS RÉEL) ===
-// Source : Assistant IA (Structure de boucle non-bloquante complexe)
+// Source : Assistant IA (Structure de boucle non-bloquante complexe + rafraichir 2 cases à la place de tout)
 // Rôle : C'est le Moteur MUX. Il gère le timer, les inputs clavier et l'affichage simultanément.
 // Entrée : La structure Partie.
 // Sortie : 1 (Gagné), 0 (Perdu), -1 (Abandon).
+// === BOUCLE DE JEU ===
 int jouerNiveau(Partie* partie) {
-    int curseurX = 5, curseurY = 5; // Position de départ du curseur
-    int selectX = -1, selectY = -1; // Aucune sélection au début (-1)
-    int partieEnCours = 1;
-    unsigned char touche;
-    int resultatNiveau = 0;
+    int cx = 5, cy = 5;       // Curseur actuel
+    int sx = -1, sy = -1;     // Sélection
+    int enCours = 1;
+    int res = 0;
 
-    // Initialisation du Chronomètre
-    clock_t debutNiveau = clock();
-    int tempsInitial = partie->temps_restant;
-    int tempsAffiche = tempsInitial;
+    // Variables pour l'optimisation d'affichage
+    int oldCx = cx, oldCy = cy;
 
-    afficherNiveauJeu(partie, curseurX, curseurY, selectX, selectY);
+    clock_t debut = clock();
+    int tempsInit = partie->temps_restant;
+    int tempsLast = tempsInit;
 
-    while (partieEnCours) {
+    // 1. DESSIN INITIAL COMPLET
+    afficherNiveauJeu(partie, cx, cy, sx, sy);
 
-        // 1. GESTION DU TEMPS (Calcul des secondes écoulées)
+    while (enCours) {
+        // Gestion du Timer
         clock_t now = clock();
-        double tempsPasse = ((double)(now - debutNiveau)) / CLOCKS_PER_SEC;
-        partie->temps_restant = tempsInitial - (int)tempsPasse;
+        partie->temps_restant = tempsInit - (int)((double)(now - debut) / CLOCKS_PER_SEC);
         if (partie->temps_restant < 0) partie->temps_restant = 0;
 
-        int actionClavier = 0;
+        int aBouge = 0; // Pour savoir si on doit rafraîchir le curseur
 
-        // 2. GESTION DU CLAVIER (Non bloquant avec kbhit)
         if (kbhit()) {
-            touche = getch();
-            actionClavier = 1;
+            unsigned char t = getch();
 
-            // Gestion des flèches directionnelles (codes spéciaux)
-            if (touche == 224) {
-                touche = getch();
-                switch (touche) {
-                    case 72: if (curseurY > 0) curseurY--; break; // Haut
-                    case 80: if (curseurY < HAUTEUR - 1) curseurY++; break; // Bas
-                    case 75: if (curseurX > 0) curseurX--; break; // Gauche
-                    case 77: if (curseurX < LARGEUR - 1) curseurX++; break; // Droite
+            // On sauvegarde l'ancienne position
+            oldCx = cx;
+            oldCy = cy;
+
+            if (t == 224) {
+                t = getch();
+                switch (t) {
+                    case 72: if(cy>0) { cy--; aBouge=1; } break; // Haut
+                    case 80: if(cy<HAUTEUR-1) { cy++; aBouge=1; } break; // Bas
+                    case 75: if(cx>0) { cx--; aBouge=1; } break; // Gauche
+                    case 77: if(cx<LARGEUR-1) { cx++; aBouge=1; } break; // Droite
                 }
             } else {
-                switch (touche) {
-                    case 27: // TOUCHE ECHAP
-                        // On met en pause implicitement car on attend une saisie
-                            allerA(0, HAUTEUR + 10); // On écrit en bas de l'écran
-                    changerCouleur(COULEUR_JAUNE);
-                    printf("Voulez-vous sauvegarder et quitter ? (O/N) : ");
+                switch (t) {
 
-                    char reponse = getch();
-                    if (reponse == 'o' || reponse == 'O') {
-                        char pseudoSauvegarde[50];
-                        changerCouleur(COULEUR_CYAN);
-                        printf("\nEntrez votre pseudo : ");
-                        changerCouleur(COULEUR_BLANC);
+                    // --- MENU PAUSE (ECHAP) ---
+                    case 27:
+                    {
+                        // On appelle ton module de pause
+                        int doitQuitter = gererMenuPause(partie, &debut);
 
-                        // On réutilise ta fonction de saisie
-                        saisirPseudo(pseudoSauvegarde, 50);
-
-                        // On sauvegarde TOUT (Plateau, Timer, Contrat...)
-                        if(sauvegarderPartieComplete(pseudoSauvegarde, partie)) {
-                            printf("\nPartie sauvegardee avec succes ! A bientot.");
+                        if (doitQuitter) {
+                            enCours = 0;
+                            res = -1;
                         } else {
-                            printf("\nErreur de sauvegarde !");
+                            // IMPORTANT : On redessine TOUT car le menu a caché le plateau
+                            afficherNiveauJeu(partie, cx, cy, sx, sy);
+                            // On force aBouge à 0 pour ne pas redessiner par dessus
+                            aBouge = 0;
                         }
-                        Sleep(1000);
-                        partieEnCours = 0;
-                        resultatNiveau = -1; // -1 pour dire qu'on quitte
-                    }
-                    else {
-                        // Si on répond Non, on efface le message et on continue à jouer
-                        // (Optionnel : il faudrait redessiner le bas de l'écran proprement)
-                        afficherNiveauJeu(partie, curseurX, curseurY, selectX, selectY);
                     }
                     break;
+                    // --------------------------
 
-                    case 'z': case 'Z': if (curseurY > 0) curseurY--; break;
-                    case 's': case 'S': if (curseurY < HAUTEUR - 1) curseurY++; break;
-                    case 'q': case 'Q': if (curseurX > 0) curseurX--; break;
-                    case 'd': case 'D': if (curseurX < LARGEUR - 1) curseurX++; break;
+                    case 'z': case 'Z': if(cy>0) { cy--; aBouge=1; } break;
+                    case 's': case 'S': if(cy<HAUTEUR-1) { cy++; aBouge=1; } break;
+                    case 'q': case 'Q': if(cx>0) { cx--; aBouge=1; } break;
+                    case 'd': case 'D': if(cx<LARGEUR-1) { cx++; aBouge=1; } break;
 
-                    case ' ': // ESPACE (Sélection)
-                        if (selectX == -1) {
-                            // Première sélection
-                            selectX = curseurX;
-                            selectY = curseurY;
-                        } else {
-                            // Deuxième sélection : Tentative d'échange
-                            if (estAdjacent(selectY, selectX, curseurY, curseurX)) {
-                                permuterItems(partie, selectY, selectX, curseurY, curseurX);
-                                gererMatchsEtCascades(partie); // On lance la réaction en chaîne
+                    case ' ': // SELECTION
+                        if (sx == -1) {
+                            sx=cx; sy=cy;
+                            // On met à jour juste cette case pour montrer la sélection {}
+                            afficherUneCase(partie, sx, sy, cx, cy, sx, sy);
+                        }
+                        else {
+                            if (estAdjacent(sy, sx, cy, cx)) {
+                                if (permuterItems(partie, sy, sx, cy, cx)) {
+
+                                    // 1. Explosions (Matchs)
+                                    gererMatchsEtCascades(partie);
+
+                                    // 2. VIRUS & CACTUS (Niveau 2+)
+                                    if (partie->niveau >= 2) {
+                                        propagerVirus(partie);
+                                        appliquerGravite(partie);
+                                        remplirCasesVides(partie);
+                                    }
+
+                                    // Comme le plateau a changé, on doit TOUT redessiner
+                                    afficherNiveauJeu(partie, cx, cy, -1, -1);
+                                    aBouge = 0; // Pas besoin de redessiner le curseur, c'est fait
+
+                                } else {
+                                    // Mouvement bloqué (Mur/Virus/Cactus)
+                                    allerA(0, 35); afficherMessageTemporaire("Bloqué !"); getch();
+                                    allerA(0, 35); printf("                                      "); // Efface message
+                                }
                             } else {
-                                allerA(0, 35);
-                                afficherMessageTemporaire("Mouvement impossible : Cases non adjacentes !");
-                                getch();
+                                allerA(0, 35); afficherMessageTemporaire("Trop loin !"); getch();
+                                allerA(0, 35); printf("                                      ");
                             }
-                            // On réinitialise la sélection
-                            selectX = -1; selectY = -1;
+
+                            // Désélection : On redessine l'ancienne case sélectionnée proprement
+                            int tempSx = sx, tempSy = sy;
+                            sx = -1; sy = -1;
+                            // Si on n'a pas tout redessiné au-dessus, on nettoie la sélection
+                            if (aBouge == 0) afficherUneCase(partie, tempSx, tempSy, cx, cy, -1, -1);
                         }
                         break;
                 }
             }
+
+            // --- OPTIMISATION D'AFFICHAGE ---
+            // Si on a juste bougé le curseur, on ne redessine que 2 cases
+            if (aBouge) {
+                afficherUneCase(partie, oldCx, oldCy, cx, cy, sx, sy); // Efface l'ancien curseur
+                afficherUneCase(partie, cx, cy, cx, cy, sx, sy);       // Affiche le nouveau
+            }
         }
 
-        // 3. VÉRIFICATION DES CONDITIONS DE FIN
-        int victoire = verifierVictoire(partie);
-
-        if (victoire) {
-            if(!actionClavier) afficherNiveauJeu(partie, curseurX, curseurY, selectX, selectY);
-            Sleep(500);
-            partieEnCours = 0;
-            resultatNiveau = 1;
-        } else if (partie->coups_restants <= 0 || partie->temps_restant <= 0) {
-            // Défaite
-            if(!actionClavier) afficherNiveauJeu(partie, curseurX, curseurY, selectX, selectY);
-            partie->vies--;
-            afficherDefaite();
-            getch();
-            partieEnCours = 0;
-            resultatNiveau = 0;
+        // Vérifications Fin de partie
+        if (verifierVictoire(partie)) {
+            if(!aBouge) afficherNiveauJeu(partie, cx, cy, sx, sy); Sleep(500); return 1;
+        }
+        if (partie->coups_restants <= 0 || partie->temps_restant <= 0) {
+            if(!aBouge) afficherNiveauJeu(partie, cx, cy, sx, sy);
+            partie->vies--; afficherDefaite(); getch(); return 0;
         }
 
-        // 4. RAFRAÎCHISSEMENT DE L'ÉCRAN
-        // Si le temps a changé, on met à jour juste le timer (Optimisation)
-        if (partieEnCours && !actionClavier && partie->temps_restant != tempsAffiche) {
-            tempsAffiche = partie->temps_restant;
+        // Timer (Optimisé)
+        if (enCours && !aBouge && partie->temps_restant != tempsLast) {
+            tempsLast = partie->temps_restant;
             rafraichirTimerSeulement(partie);
         }
-        // Si le joueur a bougé, on redessine tout
-        if (actionClavier && partieEnCours) {
-            afficherNiveauJeu(partie, curseurX, curseurY, selectX, selectY);
-        }
 
-        Sleep(10); // Petite pause pour ne pas surcharger le processeur
+        Sleep(10);
     }
-    
-    return resultatNiveau; 
+    return res;
 }
