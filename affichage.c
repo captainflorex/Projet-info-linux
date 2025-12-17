@@ -7,12 +7,13 @@
 
 // Définition statique des symboles pour ne pas surcharger la mémoire
 // Source : Assistant IA (Optimisation mémoire)
-static const char* SYMBOLES[] = {" ", "🍓", "🧅", "🍊", "🍇", "🥕", "💣", "🧱"};
+static const char* SYMBOLES[] = {" ", "🍓", "🧅", "🍊", "🍇", "🥕", "💣", "🧱", "🦠"};
 static const int COULEURS_ITEMS[] = {
     COULEUR_RESET,
     COULEUR_ROUGE, COULEUR_VIOLET, COULEUR_ORANGE, COULEUR_VIOLET, COULEUR_ORANGE,
     COULEUR_BLANC, // Bombe
-    COULEUR_BLANC  // Mur
+    COULEUR_BLANC,  // Mur
+    COULEUR_VERT   // Virus
 };
 
 // === FONCTIONS UTILITAIRES WINDOWS ===
@@ -397,4 +398,64 @@ void rafraichirTimerSeulement(Partie* partie) {
     changerCouleur(COULEUR_CYAN);
     printf("%01d:%01d", partie->temps_restant / 60, partie->temps_restant % 60);
     allerA(0, 0);
+}
+
+// === DESSINER UNE CASE UNIQUE (Optimisation) ===
+// Rôle : Met à jour l'affichage d'une seule case sans toucher au reste
+void afficherUneCase(Partie* partie, int gridX, int gridY, int curseurX, int curseurY, int selectX, int selectY) {
+    // 1. Définition des constantes de position (DOIT ÊTRE IDENTIQUE À afficherNiveauJeu)
+    int plateauX = 3;
+    int plateauY = 5;
+
+    // 2. Calcul de la position exacte sur l'écran console
+    // Chaque case fait 4 caractères de large (" [x] ")
+    int screenX = plateauX + 1 + (gridX * 4);
+    int screenY = plateauY + 1 + gridY;
+
+    // 3. Récupération de l'item
+    int item = partie->tableau[gridY][gridX];
+
+    // Symboles (reprise de ta liste statique)
+    const char* SYMBOLES[] = {" ", "🍓", "🧅", "🍊", "🍇", "🥕", "💣", "🧱", "🦠", "🌵"};
+    const int COULEURS[] = {7, 12, 13, 6, 13, 6, 15, 15, 10, 10}; // Codes couleurs simples
+
+    // 4. Déplacement du curseur console
+    allerA(screenX, screenY);
+
+    // 5. Dessin logique (Curseur vs Sélection vs Normal)
+    if (gridY == curseurY && gridX == curseurX) {
+        // C'est le curseur actuel
+        changerCouleur(15); printf("["); // Blanc
+        changerCouleur(COULEURS[item]); printf("%-2s", SYMBOLES[item]);
+        changerCouleur(15); printf("]");
+    }
+    else if (gridY == selectY && gridX == selectX) {
+        // C'est l'item sélectionné pour échange
+        changerCouleur(14); printf("{"); // Jaune
+        changerCouleur(COULEURS[item]); printf("%-2s", SYMBOLES[item]);
+        changerCouleur(14); printf("}");
+    }
+    else {
+        // Case normale
+        changerCouleur(COULEURS[item]);
+        printf(" %-2s ", SYMBOLES[item]);
+    }
+
+    changerCouleur(7); // Reset couleur
+}
+
+// === FONCTION DE SAISIE SÉCURISÉE ===
+// Source : Assistant IA (Alternative sécurisée à scanf pour l'interface graphique)
+// Rôle : Permet de taper son pseudo sans faire planter l'affichage graphique.
+// Entrée : Le tableau où stocker le texte (buffer) et sa taille max.
+// Sortie : Aucune (modifie directement le buffer).
+void saisirPseudo(char* buffer, int longueurMax) {
+    int i = 0; char c;
+    memset(buffer, 0, longueurMax);
+    while (1) {
+        c = getch();
+        if (c == 13) break;
+        else if (c == 8) { if (i > 0) { i--; printf("\b \b"); buffer[i] = '\0'; } }
+        else if (i < longueurMax - 1 && c >= 32 && c <= 126) { buffer[i] = c; i++; printf("%c", c); }
+    }
 }
