@@ -75,3 +75,31 @@ int chargerPartie(char* pseudo, int* niveau, int* vies) {
     fclose(fichier);
     return 0; // Joueur pas trouvé
 }
+int sauvegarderPartieComplete(char* pseudo, Partie* partie) {
+    char nomFichier[100];
+    sprintf(nomFichier, "%s.sav", pseudo); // Ex: "Rems.sav"
+
+    FILE* f = fopen(nomFichier, "wb"); // wb = Write Binary
+    if (f == NULL) return 0;
+
+    // On écrit directement toute la structure d'un coup
+    fwrite(partie, sizeof(Partie), 1, f);
+
+    fclose(f);
+    return 1;
+}
+
+// Rôle : Charge l'état exact du jeu depuis le fichier binaire
+int chargerPartieComplete(char* pseudo, Partie* partie) {
+    char nomFichier[100];
+    sprintf(nomFichier, "%s.sav", pseudo);
+
+    FILE* f = fopen(nomFichier, "rb"); // rb = Read Binary
+    if (f == NULL) return 0; // Pas de sauvegarde complète trouvée
+
+    // On lit les données directement dans la structure
+    fread(partie, sizeof(Partie), 1, f);
+
+    fclose(f);
+    return 1;
+}
