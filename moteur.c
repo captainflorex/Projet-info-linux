@@ -3,52 +3,73 @@
 #include <time.h>
 #include "moteur.h"
 
-// Initialise une nouvelle partie
+// === FONCTION INTERNE (Privée) ===
+// Source : Assistant IA (Algorithme d'effet de zone)
+// Rôle : Gère l'explosion d'une bombe (Bonus).
+// Entrée : Le centre de l'explosion (X, Y).
+// Sortie : Modifie le plateau et augmente le score.
+static void declencherExplosionBombe(Partie* partie, int centreY, int centreX) {
+    // Définit la zone de 4x4 cases
+    int debutY = centreY - 1; int finY = centreY + 2;
+    int debutX = centreX - 1; int finX = centreX + 2;
+
+    for (int i = debutY; i <= finY; i++) {
+        for (int j = debutX; j <= finX; j++) {
+            // Vérifie qu'on ne sort pas du tableau
+            if (i >= 0 && i < HAUTEUR && j >= 0 && j < LARGEUR) {
+                int itemTouche = partie->tableau[i][j];
+                // Si c'est un fruit, on gagne des points pour le contrat
+                if (itemTouche >= 1 && itemTouche <= NB_TYPES_ITEMS) {
+                    int index = itemTouche - 1;
+                    if (partie->elimines[index] < partie->contrat[index]) {
+                        partie->elimines[index]++;
+                    }
+                }
+                partie->tableau[i][j] = 0; // Destruction de la case
+            }
+        }
+    }
+}
+
+// === INITIALISATION ===
+// Rôle : Prépare une nouvelle partie à zéro.
 void initialiserPartie(Partie* partie) {
     partie->niveau = 1;
     partie->vies = NB_VIES_INITIAL;
     genererNiveau(partie, 1);
 }
- 
-// Génère un niveau avec une difficulté progressive et adaptée
+
+// === GÉNÉRATEUR DE NIVEAU ===
+// Rôle : Configure la difficulté (Temps, Coups, Objectifs) selon le niveau choisi.
 void genererNiveau(Partie* partie, int niveau) {
     partie->niveau = niveau;
-
-    // Configuration spécifique par niveau
     int objectifParItem = 0;
 
+    // Configuration de la difficulté
     switch(niveau) {
-        case 1:
-            // FACILE : On apprend à jouer
-                // ~10% du plateau total à élimine
-                 partie->coups_restants = 30;    // Large
-        partie->temps_restant = 90;     // 1min30 (très large)
-        objectifParItem = 10;           // Facile à atteindre
-        break;
-
-        case 2:
-            // MOYEN : Il faut réfléchir un peu
-                // On réduit les coups par rapport à l'objectif
-                    partie->coups_restants = 35;    // +5 coups seulement pour double objectif
-        partie->temps_restant = 120;    // 2min
-        objectifParItem = 20;           // Le double du niveau 1
-        break;
-
-        case 3:
-            // DIFFICILE : Nécessite des combos / figures spéciales
-                partie->coups_restants = 50;
-        partie->temps_restant = 240;    // 4min
-        objectifParItem = 100;           // contrat
-        break;
-
+        case 1: // Facile
+            partie->coups_restants = 30;
+            partie->temps_restant = 90;
+            objectifParItem = 10;
+            break;
+        case 2: // Moyen
+            partie->coups_restants = 35;
+            partie->temps_restant = 120;
+            objectifParItem = 20;
+            break;
+        case 3: // Difficile
+            partie->coups_restants = 50;
+            partie->temps_restant = 240;
+            objectifParItem = 30;
+            break;
         default:
-            // Sécurité pour les niveaux > 3 (si jamais)
-                partie->coups_restants = 40;
-        partie->temps_restant = 120;
-        objectifParItem = 30;
-        break;
+            partie->coups_restants = 40;
+            partie->temps_restant = 120;
+            objectifParItem = 30;
+            break;
     }
-    // Initialiser le contrat
+
+    // Initialisation des compteurs d'objectifs
     for (int i = 0; i < NB_TYPES_ITEMS; i++) {
         partie->contrat[i] = objectifParItem;
         partie->elimines[i] = 0;
@@ -56,30 +77,27 @@ void genererNiveau(Partie* partie, int niveau) {
     remplirTableauAleatoire(partie);
 }
 
-// Remplit le tableau aléatoirement SANS matchs de départ ET SANS BOMBES
+// === REMPLISSAGE INITIAL ===
+// Rôle : Remplit le tableau au début, en s'assurant qu'il n'y a pas déjà de matchs faits.
 void remplirTableauAleatoire(Partie* partie) {
     srand(time(NULL));
 
-    // 1. Remplissage aléatoire initial
+    // 1. Remplissage brute
     for (int i = 0; i < HAUTEUR; i++) {
         for (int j = 0; j < LARGEUR; j++) {
             partie->tableau[i][j] = (rand() % NB_TYPES_ITEMS) + 1;
         }
     }
 
-    // 2. Boucle de stabilisation
-    // (Supprime les alignements de 3 créés par hasard)
+    // 2. Stabilisation (On supprime les matchs qui se sont créés par hasard)
     int iterations = 0;
     while (detecterEtEliminerMatchs(partie) > 0 && iterations < 50) {
         appliquerGravite(partie);
-        remplirCasesVides(partie); // Ici, une bombe pourrait apparaître au niveau 2+
+        remplirCasesVides(partie);
         iterations++;
     }
 
-    // 3. NETTOYAGE DE SÉCURITÉ (NOUVEAU)
-    // On parcourt tout le tableau une dernière fois.
-    // Si on trouve une bombe (qui serait apparue pendant l'étape 2),
-    // on la remplace par un fruit normal.
+    // 3. Sécurité : On retire les bombes qui auraient pu apparaître au setup
     for (int i = 0; i < HAUTEUR; i++) {
         for (int j = 0; j < LARGEUR; j++) {
             if (partie->tableau[i][j] == ITEM_BOMBE) {
@@ -88,73 +106,38 @@ void remplirTableauAleatoire(Partie* partie) {
         }
     }
 
-    // 4. Réinitialiser le score
+    // 4. Remise à zéro des scores (car la stabilisation a pu en marquer)
     for (int i = 0; i < NB_TYPES_ITEMS; i++) {
         partie->elimines[i] = 0;
     }
 }
 
-// Vérifie si deux cases sont adjacentes
+// === UTILITAIRE ADJACENCE ===
+// Rôle : Vérifie mathématiquement si deux cases sont côte à côte.
+// Sortie : 1 (Oui), 0 (Non).
 int estAdjacent(int y1, int x1, int y2, int x2) {
-    if (abs(y1 - y2) + abs(x1 - x2) == 1) {
-        return 1;
-    }
+    if (abs(y1 - y2) + abs(x1 - x2) == 1) return 1;
     return 0;
 }
 
-// Fonction pour faire exploser une zone 4x4 autour d'un point
-void declencherExplosionBombe(Partie* partie, int centreY, int centreX) {
-    // Une zone 4x4 signifie -1 à +2 autour du centre (ou -2 à +1)
-    // On va centrer au mieux : de (y-1) à (y+2)
-
-    int debutY = centreY - 1;
-    int finY = centreY + 2;
-    int debutX = centreX - 1;
-    int finX = centreX + 2;
-
-    for (int i = debutY; i <= finY; i++) {
-        for (int j = debutX; j <= finX; j++) {
-
-            // Vérification des limites du plateau
-            if (i >= 0 && i < HAUTEUR && j >= 0 && j < LARGEUR) {
-
-                int itemTouche = partie->tableau[i][j];
-
-                // Si c'est un fruit valide, on augmente le score !
-                if (itemTouche >= 1 && itemTouche <= NB_TYPES_ITEMS) {
-                    int index = itemTouche - 1;
-                    if (partie->elimines[index] < partie->contrat[index]) {
-                        partie->elimines[index]++;
-                    }
-                }
-
-                // On détruit l'item (même si c'est une autre bombe !)
-                partie->tableau[i][j] = 0;
-            }
-        }
-    }
-}
-
+// === GESTION DU MOUVEMENT (PERMUTATION) ===
+// Rôle : Tente d'échanger deux items sélectionnés par le joueur.
+// Sortie : 1 si le mouvement a réussi, 0 sinon (bloqué par un mur ou non adjacent).
 int permuterItems(Partie* partie, int y1, int x1, int y2, int x2) {
     if (!estAdjacent(y1, x1, y2, x2)) return 0;
 
     int item1 = partie->tableau[y1][x1];
     int item2 = partie->tableau[y2][x2];
 
-    // --- LOGIQUE MALUS : IMPOSSIBLE DE BOUGER UN MUR ---
-    if (item1 == ITEM_MUR || item2 == ITEM_MUR) {
-        // Astuce visuelle : on pourrait afficher un message ici
-        return 0; // On refuse le mouvement
-    }
-    // --- LOGIQUE BOMBE ---
-    int bombeDeclenchee = 0;
+    // RÈGLE IMPORTANTE : On ne peut pas déplacer un MUR
+    if (item1 == ITEM_MUR || item2 == ITEM_MUR) return 0;
 
-    // Cas 1 : L'item 1 est une bombe
+    // GESTION SPECIALE : Si on touche une BOMBE
+    int bombeDeclenchee = 0;
     if (item1 == ITEM_BOMBE) {
         declencherExplosionBombe(partie, y1, x1);
         bombeDeclenchee = 1;
     }
-    // Cas 2 : L'item 2 est une bombe
     else if (item2 == ITEM_BOMBE) {
         declencherExplosionBombe(partie, y2, x2);
         bombeDeclenchee = 1;
@@ -162,74 +145,56 @@ int permuterItems(Partie* partie, int y1, int x1, int y2, int x2) {
 
     if (bombeDeclenchee) {
         partie->coups_restants--;
-
-        // --- CORRECTION IMPORTANTE ---
-        // On applique la gravité et le remplissage TOUT DE SUITE
-        // pour boucher le trou laissé par l'explosion.
+        // Après explosion, on fait tomber les items
         appliquerGravite(partie);
         remplirCasesVides(partie);
-
-        // Ensuite, le main() appellera gererMatchsEtCascades()
-        // pour voir si cette chute a créé de nouveaux combos.
-        return 1;
+        return 1; // Mouvement validé
     }
 
-    // --- PERMUTATION NORMALE (Si pas de bombe) ---
-
+    // MOUVEMENT CLASSIQUE (Swap)
     int temp = partie->tableau[y1][x1];
     partie->tableau[y1][x1] = partie->tableau[y2][x2];
     partie->tableau[y2][x2] = temp;
 
     partie->coups_restants--;
-
     return 1;
 }
 
+// === GRAVITÉ ===
+// Source : Assistant IA (Algorithme de chute avec pointeur d'écriture)
+// Rôle : Fait tomber les fruits flottants vers le bas pour combler les trous.
 void appliquerGravite(Partie* partie) {
-    // Boucle pour chaque colonne
     for (int j = 0; j < LARGEUR; j++) {
-        // 'k' est notre "pointeur d'écriture"
-        // Il commence en bas et remonte
-        int k = HAUTEUR - 1;
-
-        // On lit la colonne de bas en haut
+        int k = HAUTEUR - 1; // Pointeur d'écriture (commence en bas)
+        // On parcourt la colonne de bas en haut
         for (int i = HAUTEUR - 1; i >= 0; i--) {
-            // Si on trouve un item non-vide
             if (partie->tableau[i][j] != 0) {
-                // On le déplace vers le bas à la position 'k'
+                // Si on trouve un fruit, on le copie à la position 'k'
                 partie->tableau[k][j] = partie->tableau[i][j];
-
-                // Si 'i' et 'k' ne sont pas au même endroit,
-                // on vide la case d'origine
-                if (i != k) {
-                    partie->tableau[i][j] = 0;
-                }
-                // On déplace le pointeur d'écriture vers le haut
-                k--;
+                // Si on l'a déplacé, on vide l'ancienne case
+                if (i != k) partie->tableau[i][j] = 0;
+                k--; // On remonte le pointeur
             }
         }
-
-        // Toutes les cases au-dessus de 'k' sont maintenant vides (0)
-        // (La boucle 'i' s'est assurée de ça)
     }
 }
 
+// === REMPLISSAGE APRES CHUTE ===
+// Rôle : Remplit les cases vides en haut du tableau avec de nouveaux items.
 void remplirCasesVides(Partie* partie) {
     for (int i = 0; i < HAUTEUR; i++) {
         for (int j = 0; j < LARGEUR; j++) {
             if (partie->tableau[i][j] == 0) {
-
                 int chance = rand() % 300;
-
-                // BOMBE (0.3%)
+                // Apparition rare de Bombe (0.3%) si niveau > 1
                 if (chance == 0 && partie->niveau > 1) {
                     partie->tableau[i][j] = ITEM_BOMBE;
                 }
-                // MUR / MALUS (2% de chance, index 1 à 6)
+                // Apparition rare de Mur (2%) si niveau > 1
                 else if (chance >= 1 && chance <= 6 && partie->niveau > 1) {
                     partie->tableau[i][j] = ITEM_MUR;
                 }
-                // FRUIT NORMAL
+                // Sinon Fruit aléatoire
                 else {
                     partie->tableau[i][j] = (rand() % NB_TYPES_ITEMS) + 1;
                 }
@@ -238,138 +203,82 @@ void remplirCasesVides(Partie* partie) {
     }
 }
 
+// === ALGORITHME DE DÉTECTION (Cœur du jeu) ===
+// Source : Assistant IA (Algorithme de marquage matriciel complexe)
+// Rôle : Scanne toute la grille pour trouver les alignements (Matchs).
+// Sortie : Le nombre total d'items détruits.
 int detecterEtEliminerMatchs(Partie* partie) {
     int totalElimines = 0;
-    // Tableau temporaire pour marquer les items à supprimer
-    int marques[HAUTEUR][LARGEUR] = {0};
+    int marques[HAUTEUR][LARGEUR] = {0}; // Tableau temporaire pour noter ce qu'on va détruire
 
-    // --- 1. Détection des figures ---
-
+    // ÉTAPE 1 : DÉTECTION
     for (int i = 0; i < HAUTEUR; i++) {
         for (int j = 0; j < LARGEUR; j++) {
             int item = partie->tableau[i][j];
-            if (item == 0) continue; // Case vide
+            // On ignore les cases vides, les bombes et les murs pour les alignements
+            if (item == 0 || item == ITEM_BOMBE || item == ITEM_MUR) continue;
 
-
-            // --- Règle 1 : Suite de 6 (Horizontale) ---
-            // Effet : Élimine TOUS les items de ce type sur le plateau
+            // Règle : Suite de 6 (Horizontale) -> Bonus : Supprime tout le type
             if (j <= LARGEUR - 6 &&
-                partie->tableau[i][j+1] == item &&
-                partie->tableau[i][j+2] == item &&
-                partie->tableau[i][j+3] == item &&
-                partie->tableau[i][j+4] == item &&
-                partie->tableau[i][j+5] == item)
+                partie->tableau[i][j+1] == item && partie->tableau[i][j+2] == item &&
+                partie->tableau[i][j+3] == item && partie->tableau[i][j+4] == item && partie->tableau[i][j+5] == item)
             {
-                for (int y = 0; y < HAUTEUR; y++) {
-                    for (int x = 0; x < LARGEUR; x++) {
-                        if (partie->tableau[y][x] == item) {
-                            marques[y][x] = 1;
-                        }
-                    }
-                }
+                // On marque toutes les cases du plateau qui ont cette couleur
+                for (int y = 0; y < HAUTEUR; y++)
+                    for (int x = 0; x < LARGEUR; x++)
+                        if (partie->tableau[y][x] == item) marques[y][x] = 1;
             }
 
-            // --- Règle 1 : Suite de 6 (Verticale) ---
-            // Effet : Élimine TOUS les items de ce type sur le plateau
+            // Règle : Suite de 6 (Verticale)
             if (i <= HAUTEUR - 6 &&
-                partie->tableau[i+1][j] == item &&
-                partie->tableau[i+2][j] == item &&
-                partie->tableau[i+3][j] == item &&
-                partie->tableau[i+4][j] == item &&
-                partie->tableau[i+5][j] == item)
+                partie->tableau[i+1][j] == item && partie->tableau[i+2][j] == item &&
+                partie->tableau[i+3][j] == item && partie->tableau[i+4][j] == item && partie->tableau[i+5][j] == item)
             {
-                for (int y = 0; y < HAUTEUR; y++) {
-                    for (int x = 0; x < LARGEUR; x++) {
-                        if (partie->tableau[y][x] == item) {
-                            marques[y][x] = 1;
-                        }
-                    }
-                }
+                for (int y = 0; y < HAUTEUR; y++)
+                    for (int x = 0; x < LARGEUR; x++)
+                        if (partie->tableau[y][x] == item) marques[y][x] = 1;
             }
 
-            // --- RÈGLE 2 : Croix (3x3) ---
-            // Forme : Une ligne de 3H et 3V qui se croisent (Forme '+')
-            // Effet : Élimine tous les items de ce type sur la LIGNE et la COLONNE
+            // Règle : Croix (3x3) -> Supprime Ligne + Colonne
             if (i >= 1 && i < HAUTEUR - 1 && j >= 1 && j < LARGEUR - 1 &&
-                // Ligne Horizontale de 3 (Gauche + Droite)
-                partie->tableau[i][j-1] == item &&
-                partie->tableau[i][j+1] == item &&
-                // Ligne Verticale de 3 (Haut + Bas)
-                partie->tableau[i-1][j] == item &&
-                partie->tableau[i+1][j] == item)
+                partie->tableau[i][j-1] == item && partie->tableau[i][j+1] == item &&
+                partie->tableau[i-1][j] == item && partie->tableau[i+1][j] == item)
             {
-                // Marque toute la LIGNE (i)
-                for (int x = 0; x < LARGEUR; x++) {
-                    if (partie->tableau[i][x] == item) {
-                        marques[i][x] = 1;
-                    }
-                }
-                // Marque toute la COLONNE (j)
-                for (int y = 0; y < HAUTEUR; y++) {
-                    if (partie->tableau[y][j] == item) {
-                        marques[y][j] = 1;
-                    }
-                }
+                for (int x = 0; x < LARGEUR; x++) if (partie->tableau[i][x] == item) marques[i][x] = 1;
+                for (int y = 0; y < HAUTEUR; y++) if (partie->tableau[y][j] == item) marques[y][j] = 1;
             }
 
-            // --- NOUVELLE RÈGLE 3 : Carré (4x4) ---
-            // Effet : Élimine tous les items de ce type DANS le carré
+            // Règle : Carré (4x4) -> Supprime la zone carrée
             if (i <= HAUTEUR - 4 && j <= LARGEUR - 4) {
                 int estCarre = 1;
-                // Vérifie les 16 cases
-                for (int y = i; y < i + 4; y++) {
-                    for (int x = j; x < j + 4; x++) {
-                        if (partie->tableau[y][x] != item) {
-                            estCarre = 0;
-                            break;
-                        }
-                    }
-                    if (!estCarre) break;
-                }
+                for (int y = i; y < i + 4; y++)
+                    for (int x = j; x < j + 4; x++)
+                        if (partie->tableau[y][x] != item) estCarre = 0;
 
                 if (estCarre) {
-                    // Marque les 16 cases du carré
-                    for (int y = i; y < i + 4; y++) {
-                        for (int x = j; x < j + 4; x++) {
-                            marques[y][x] = 1;
-                        }
-                    }
+                    for (int y = i; y < i + 4; y++)
+                        for (int x = j; x < j + 4; x++) marques[y][x] = 1;
                 }
             }
 
-            // --- Règle 4 : Suite de 4 (Horizontale) ---
-            // Effet : Élimine les 4 items
-            if (j <= LARGEUR - 4 &&
-                partie->tableau[i][j+1] == item &&
-                partie->tableau[i][j+2] == item &&
-                partie->tableau[i][j+3] == item)
-            {
-                marques[i][j] = 1; marques[i][j+1] = 1;
-                marques[i][j+2] = 1; marques[i][j+3] = 1;
+            // Règle de base : Suite de 4 (Horizontale)
+            if (j <= LARGEUR - 4 && partie->tableau[i][j+1]==item && partie->tableau[i][j+2]==item && partie->tableau[i][j+3]==item) {
+                for(int k=0; k<4; k++) marques[i][j+k] = 1;
             }
-
-            // --- Règle 4 : Suite de 4 (Verticale) ---
-            // Effet : Élimine les 4 items
-            if (i <= HAUTEUR - 4 &&
-                partie->tableau[i+1][j] == item &&
-                partie->tableau[i+2][j] == item &&
-                partie->tableau[i+3][j] == item)
-            {
-                marques[i][j] = 1; marques[i+1][j] = 1;
-                marques[i+2][j] = 1; marques[i+3][j] = 1;
+            // Règle de base : Suite de 4 (Verticale)
+            if (i <= HAUTEUR - 4 && partie->tableau[i+1][j]==item && partie->tableau[i+2][j]==item && partie->tableau[i+3][j]==item) {
+                for(int k=0; k<4; k++) marques[i+k][j] = 1;
             }
         }
     }
 
-    // --- 2. Élimination, Score ET DESTRUCTION DES MURS VOISINS ---
+    // ÉTAPE 2 : SUPPRESSION & SCORE
     for (int i = 0; i < HAUTEUR; i++) {
         for (int j = 0; j < LARGEUR; j++) {
-
-            // Si cet item doit être éliminé (c'est un fruit aligné)
             if (marques[i][j] == 1) {
                 int itemType = partie->tableau[i][j];
 
-                // 1. Score (Fruits seulement)
+                // Mise à jour des objectifs (Contrat)
                 if (itemType >= 1 && itemType <= NB_TYPES_ITEMS) {
                     int index = itemType - 1;
                     if (partie->elimines[index] < partie->contrat[index]) {
@@ -377,46 +286,39 @@ int detecterEtEliminerMatchs(Partie* partie) {
                     }
                 }
 
-                // 2. Suppression du fruit
+                // Suppression effective
                 partie->tableau[i][j] = 0;
                 totalElimines++;
 
-                // 3. DESTRUCTION DES MURS ADJACENTS (Haut/Bas/Gauche/Droite)
-                // On vérifie chaque voisin. Si c'est un MUR, on le casse (0).
-
-                // Haut
-                if (i > 0 && partie->tableau[i-1][j] == ITEM_MUR)
-                    partie->tableau[i-1][j] = 0;
-                // Bas
-                if (i < HAUTEUR - 1 && partie->tableau[i+1][j] == ITEM_MUR)
-                    partie->tableau[i+1][j] = 0;
-                // Gauche
-                if (j > 0 && partie->tableau[i][j-1] == ITEM_MUR)
-                    partie->tableau[i][j-1] = 0;
-                // Droite
-                if (j < LARGEUR - 1 && partie->tableau[i][j+1] == ITEM_MUR)
-                    partie->tableau[i][j+1] = 0;
+                // Règle : Les murs voisins sont fragilisés et détruits
+                if (i > 0 && partie->tableau[i-1][j] == ITEM_MUR) partie->tableau[i-1][j] = 0;
+                if (i < HAUTEUR - 1 && partie->tableau[i+1][j] == ITEM_MUR) partie->tableau[i+1][j] = 0;
+                if (j > 0 && partie->tableau[i][j-1] == ITEM_MUR) partie->tableau[i][j-1] = 0;
+                if (j < LARGEUR - 1 && partie->tableau[i][j+1] == ITEM_MUR) partie->tableau[i][j+1] = 0;
             }
         }
     }
     return totalElimines;
 }
-
+// === CASCADE ===
+// Rôle : Répète la gravité et la détection tant qu'il y a des nouveaux matchs qui se forment.
 void gererMatchsEtCascades(Partie* partie) {
     // Boucle "Jusqu'à stabilisation"
     while (detecterEtEliminerMatchs(partie) > 0) {
-        appliquerGravite(partie);// Appliquer la gravité
-        remplirCasesVides(partie);// Remplir les cases vides
+        appliquerGravite(partie); // Appliquer la gravité
+        remplirCasesVides(partie); // Remplir les cases vides
     }
 }
 
+// === VÉRIFICATION VICTOIRE ===
+// Rôle : Vérifie si tous les contrats sont remplis.
 int verifierVictoire(Partie* partie) {
     for (int i = 0; i < NB_TYPES_ITEMS; i++) {
         // Si un seul objectif n'est pas atteint...
         if (partie->elimines[i] < partie->contrat[i]) {
-            return 0; // Défaite
+            return 0; // Défaite (ou pas encore gagné)
         }
     }
-    // Si la boucle se termine, c'est que tout est atteint.
+    // Si la boucle se termine sans return 0, c'est que tout est atteint.
     return 1; // Victoire
 }
