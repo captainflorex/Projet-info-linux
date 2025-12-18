@@ -4,17 +4,34 @@
 #include "structures.h"
 
 // Codes couleurs pour utiliser les couleurs de Windowq
-#define COULEUR_RESET 7
-#define COULEUR_ROUGE 12
-#define COULEUR_VIOLET 13
-#define COULEUR_ORANGE 6
-#define COULEUR_VERT 10
-#define COULEUR_JAUNE 14
-#define COULEUR_CYAN 11
-#define COULEUR_BLANC 15
+//#define COULEUR_RESET 7 windows
+//#define COULEUR_ROUGE 12 windows
+//#define COULEUR_VIOLET 13 windows
+//#define COULEUR_ORANGE 6 windows
+//#define COULEUR_VERT 10 windows
+//#define COULEUR_JAUNE 14 windows
+//#define COULEUR_CYAN 11 windows
+//#define COULEUR_BLANC 15 windows
+
+#define COULEUR_RESET  "\033[0m"
+#define COULEUR_ROUGE  "\033[1;31m"
+#define COULEUR_VIOLET "\033[1;35m"
+#define COULEUR_ORANGE "\033[38;5;208m" // Supporté par la plupart des terminaux modernes
+#define COULEUR_VERT   "\033[1;32m"
+#define COULEUR_JAUNE  "\033[1;33m"
+#define COULEUR_CYAN   "\033[1;36m"
+#define COULEUR_BLANC  "\033[1;37m"
 
 // Fonctions utilitaires d'affichage
-void changerCouleur(int couleur);
+void changerCouleur(const char* couleur); // Changé de int à char*
+
+
+void portableSleep(int ms); //pour le multi os
+int portableGetch(void); //pour le multi os
+int portableKbhit(void); //pour le multi os
+
+// Fonctions utilitaires d'affichage
+//void changerCouleur(int couleur); windows
 void allerA(int x, int y);
 void effacerEcran(void);
 

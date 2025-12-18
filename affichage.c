@@ -1,14 +1,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
-#include <conio.h>
+
+
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <conio.h>
+#else
+    #include <unistd.h>
+    #include <termios.h>
+    #include <fcntl.h>
+#endif
+
 #include "affichage.h"
 
 // Définition statique des symboles pour ne pas surcharger la mémoire
 // Source : Assistant IA (Optimisation mémoire)
 static const char* SYMBOLES[] = {" ", "🍓", "🧅", "🍊", "🍇", "🥕", "💣", "🧱", "🦠"};
-static const int COULEURS_ITEMS[] = {
+static const char*  COULEURS_ITEMS[] = {
     COULEUR_RESET,
     COULEUR_ROUGE, COULEUR_VIOLET, COULEUR_ORANGE, COULEUR_VIOLET, COULEUR_ORANGE,
     COULEUR_BLANC, // Bombe
@@ -19,7 +29,7 @@ static const int COULEURS_ITEMS[] = {
 // === FONCTIONS UTILITAIRES WINDOWS ===
 // Source : Documentation Windows.h / Assistant IA
 // Permet de manipuler la console (Couleurs, Position du curseur).
-
+/*
 void changerCouleur(int couleur) {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsole, couleur);
@@ -34,6 +44,73 @@ void allerA(int x, int y) {
 
 void effacerEcran(void) {
     system("cls");
+}
+
+*/
+
+void changerCouleur(const char* couleur) {
+    printf("%s", couleur);
+}
+
+void allerA(int x, int y) {
+    // ANSI utilise 1,1 comme origine, Windows 0,0. On ajoute +1.
+    printf("\033[%d;%dH", y + 1, x + 1);
+    fflush(stdout);
+}
+
+void effacerEcran(void) {
+    printf("\033[H\033[J"); // Code ANSI pour effacer
+    fflush(stdout);
+}
+
+void portableSleep(int ms) {
+#ifdef _WIN32
+    Sleep(ms);
+#else
+    usleep(ms * 1000); // usleep utilise des microsecondes
+#endif
+}
+
+// Implémentation de getch() pour Linux (via termios)
+int portableGetch(void) {
+#ifdef _WIN32
+    return getch();
+#else
+    struct termios oldt, newt;
+    int ch;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return ch;
+#endif
+}
+
+// Implémentation de kbhit() pour Linux
+int portableKbhit(void) {
+#ifdef _WIN32
+    return kbhit();
+#else
+    struct termios oldt, newt;
+    int ch;
+    int oldf;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+    if(ch != EOF) {
+        ungetc(ch, stdin);
+        return 1;
+    }
+    return 0;
+#endif
 }
 
 // === AFFICHAGE DES MENUS ===
@@ -326,7 +403,7 @@ void afficherVictoire(void) {
         allerA(posX - 5, textY);
         if (i % 2 == 0) changerCouleur(COULEUR_VERT); else changerCouleur(COULEUR_BLANC);
         printf("    >>>   N I V E A U   R É U S S I   <<<    ");
-        Sleep(150);
+        portableSleep(150);
     }
     changerCouleur(COULEUR_CYAN);
     allerA(posX - 2, textY + 3);
@@ -347,7 +424,7 @@ void afficherDefaite(void) {
         allerA(posX - 2, textY);
         changerCouleur(COULEUR_ROUGE);
         printf("    !!!   G A M E   O V E R   !!!    ");
-        Sleep(150);
+        portableSleep(150);
     }
     changerCouleur(COULEUR_CYAN);
     allerA(posX, textY + 3);
@@ -358,11 +435,11 @@ void afficherDefaite(void) {
 void afficherEcranFinJeu(void) {
     effacerEcran();
     int posX = 40; int posY = 5;
-    int couleurs[] = {COULEUR_JAUNE, COULEUR_ORANGE, COULEUR_ROUGE, COULEUR_VIOLET, COULEUR_CYAN, COULEUR_VERT};
+    const char* couleurs[] = {COULEUR_JAUNE, COULEUR_ORANGE, COULEUR_ROUGE, COULEUR_VIOLET, COULEUR_CYAN, COULEUR_VERT};
     int frame = 0;
 
     // Animation finale
-    while (!kbhit()) {
+    while (!portableKbhit()) {
         changerCouleur(couleurs[frame % 6]);
         int y = posY;
         allerA(posX, y++); printf("   ___  _  _   _   __  __  ___  ___   ___  _  _  ");
@@ -373,10 +450,10 @@ void afficherEcranFinJeu(void) {
         changerCouleur(COULEUR_CYAN);
         allerA(posX + 5, y + 4);
         printf(">>> APPUYEZ SUR UNE TOUCHE POUR QUITTER <<<");
-        Sleep(150);
+        portableSleep(150);
         frame++;
     }
-    getch();
+    portableGetch();
     changerCouleur(COULEUR_RESET);
     effacerEcran();
 }
@@ -424,24 +501,20 @@ void afficherUneCase(Partie* partie, int gridX, int gridY, int curseurX, int cur
 
     // 5. Dessin logique (Curseur vs Sélection vs Normal)
     if (gridY == curseurY && gridX == curseurX) {
-        // C'est le curseur actuel
-        changerCouleur(15); printf("["); // Blanc
-        changerCouleur(COULEURS[item]); printf("%-2s", SYMBOLES[item]);
-        changerCouleur(15); printf("]");
+        changerCouleur(COULEUR_BLANC); printf("[");
+        changerCouleur(COULEURS_ITEMS[item]); printf("%-2s", SYMBOLES[item]);
+        changerCouleur(COULEUR_BLANC); printf("]");
     }
     else if (gridY == selectY && gridX == selectX) {
-        // C'est l'item sélectionné pour échange
-        changerCouleur(14); printf("{"); // Jaune
-        changerCouleur(COULEURS[item]); printf("%-2s", SYMBOLES[item]);
-        changerCouleur(14); printf("}");
+        changerCouleur(COULEUR_JAUNE); printf("{");
+        changerCouleur(COULEURS_ITEMS[item]); printf("%-2s", SYMBOLES[item]);
+        changerCouleur(COULEUR_JAUNE); printf("}");
     }
     else {
-        // Case normale
-        changerCouleur(COULEURS[item]);
+        changerCouleur(COULEURS_ITEMS[item]);
         printf(" %-2s ", SYMBOLES[item]);
     }
-
-    changerCouleur(7); // Reset couleur
+    changerCouleur(COULEUR_RESET); // Reset couleur
 }
 
 // === FONCTION DE SAISIE SÉCURISÉE ===
@@ -453,7 +526,7 @@ void saisirPseudo(char* buffer, int longueurMax) {
     int i = 0; char c;
     memset(buffer, 0, longueurMax);
     while (1) {
-        c = getch();
+        c = portableGetch();
         if (c == 13) break;
         else if (c == 8) { if (i > 0) { i--; printf("\b \b"); buffer[i] = '\0'; } }
         else if (i < longueurMax - 1 && c >= 32 && c <= 126) { buffer[i] = c; i++; printf("%c", c); }

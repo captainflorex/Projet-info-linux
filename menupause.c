@@ -1,8 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <conio.h>
-#include <windows.h>
+
 #include <time.h>
+
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <conio.h>
+#else
+    #include <unistd.h>
+    #include <termios.h>
+#endif
 
 #include "menupause.h"
 #include "affichage.h"   // Pour effacerEcran, couleurs, saisirPseudo...
@@ -41,7 +49,7 @@ int gererMenuPause(Partie* partie, clock_t* debutNiveau) {
 
     while (resterDansMenu) {
         afficherDesignMenuPause();
-        char choix = getch();
+        char choix = portableGetch();
 
         switch (choix) {
             case '1': // REPRENDRE
@@ -67,7 +75,7 @@ int gererMenuPause(Partie* partie, clock_t* debutNiveau) {
                     changerCouleur(COULEUR_ROUGE);
                     printf("\n\n  >> Erreur de sauvegarde.");
                 }
-                Sleep(1500);
+                portableSleep(1500);
                 resterDansMenu = 0;
                 codeRetour = 1; // On signale qu'on veut quitter
             }

@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <conio.h>
 #include <time.h>
-#include <windows.h>
 
+#include "portability.h"
 #include "structures.h"
 #include "affichage.h"
 #include "moteur.h"
@@ -22,14 +21,14 @@ int main() {
     int continuer = 1;
     char pseudo[50];
 
-    system("chcp 65001 > nul");
+    INIT_CONSOLE();
 
     while (continuer) {
         afficherMenuPrincipal();
-        char touche = getch();
+        char touche = portableGetch();
 
         switch (touche) {
-            case '1': afficherRegles(); getch(); break;
+            case '1': afficherRegles(); portableGetch(); break;
             case '2': initialiserPartie(&partie); lancerJeu(&partie); break;
             case '3': // CHARGER
                 effacerEcran();
@@ -40,17 +39,17 @@ int main() {
 
             if (chargerPartieComplete(pseudo, &partie)) {
                 printf("\n\n  >> Partie en cours retrouvee !");
-                Sleep(1500);
+                portableSleep(1500);
                 lancerJeu(&partie);
             }
             else if (chargerPartie(pseudo, &partie.niveau, &partie.vies)) {
                 printf("\n\n  >> Progression retrouvee !");
-                Sleep(1500);
+                portableSleep(1500);
                 genererNiveau(&partie, partie.niveau);
                 lancerJeu(&partie);
             } else {
                 printf("\n\n  >> Aucune sauvegarde trouvée.");
-                Sleep(2000);
+                portableSleep(2000);
             }
             break;
             case '4': continuer = 0; break;
@@ -83,7 +82,7 @@ void lancerJeu(Partie* partie) {
                 changerCouleur(COULEUR_JAUNE);
                 printf("\n\n    Voulez-vous sauvegarder ? (O/N) : ");
 
-                char choix = getch();
+                char choix = portableGetch();
                 if (choix == 'o' || choix == 'O') {
                     changerCouleur(COULEUR_CYAN);
                     printf("\n    Entrez un pseudo : ");
@@ -95,7 +94,7 @@ void lancerJeu(Partie* partie) {
 
                     changerCouleur(COULEUR_VERT);
                     printf("\n    Sauvegarde effectuée !");
-                    Sleep(1000);
+                    portableSleep(1000);
                 }
             }
 
@@ -108,7 +107,7 @@ void lancerJeu(Partie* partie) {
                 effacerEcran();
                 changerCouleur(COULEUR_VERT);
                 printf("\n\n    PASSAGE AU NIVEAU %d\n", partie->niveau);
-                Sleep(1500);
+                portableSleep(1500);
                 genererNiveau(partie, partie->niveau);
             }
         }
@@ -122,13 +121,13 @@ void lancerJeu(Partie* partie) {
                 effacerEcran();
                 changerCouleur(COULEUR_ROUGE);
                 printf("\n\n    IL VOUS RESTE %d VIES. RECOMMENCEZ !\n", partie->vies);
-                Sleep(2000);
+                portableSleep(2000);
                 genererNiveau(partie, partie->niveau); // On recommence le même niveau
             } else {
                 effacerEcran();
                 changerCouleur(COULEUR_ROUGE);
                 printf("\n\n    GAME OVER FINAL\n");
-                Sleep(2000);
+                portableSleep(2000);
             }
         }
     }
@@ -165,14 +164,14 @@ int jouerNiveau(Partie* partie) {
         int aBouge = 0; // Pour savoir si on doit rafraîchir le curseur
 
         if (kbhit()) {
-            unsigned char t = getch();
+            unsigned char t = portableGetch();
 
             // On sauvegarde l'ancienne position
             oldCx = cx;
             oldCy = cy;
 
             if (t == 224) {
-                t = getch();
+                t = portableGetch();
                 switch (t) {
                     case 72: if(cy>0) { cy--; aBouge=1; } break; // Haut
                     case 80: if(cy<HAUTEUR-1) { cy++; aBouge=1; } break; // Bas
@@ -232,11 +231,11 @@ int jouerNiveau(Partie* partie) {
 
                                 } else {
                                     // Mouvement bloqué (Mur/Virus/Cactus)
-                                    allerA(0, 35); afficherMessageTemporaire("Bloqué !"); getch();
+                                    allerA(0, 35); afficherMessageTemporaire("Bloqué !"); portableGetch();
                                     allerA(0, 35); printf("                                      "); // Efface message
                                 }
                             } else {
-                                allerA(0, 35); afficherMessageTemporaire("Trop loin !"); getch();
+                                allerA(0, 35); afficherMessageTemporaire("Trop loin !"); portableGetch();
                                 allerA(0, 35); printf("                                      ");
                             }
 
@@ -260,20 +259,17 @@ int jouerNiveau(Partie* partie) {
 
         // Vérifications Fin de partie
         if (verifierVictoire(partie)) {
-            if(!aBouge) afficherNiveauJeu(partie, cx, cy, sx, sy); Sleep(500); return 1;
-        }
-        if (partie->coups_restants <= 0 || partie->temps_restant <= 0) {
+            if(!aBouge) afficherNiveauJeu(partie, cx, cy, sx, sy); portableSleep(500); return 1;
+        }if (partie->coups_restants <= 0 || partie->temps_restant <= 0) {
             if(!aBouge) afficherNiveauJeu(partie, cx, cy, sx, sy);
-            partie->vies--; afficherDefaite(); getch(); return 0;
+            partie->vies--; afficherDefaite(); portableGetch(); return 0;
         }
-
         // Timer (Optimisé)
         if (enCours && !aBouge && partie->temps_restant != tempsLast) {
             tempsLast = partie->temps_restant;
             rafraichirTimerSeulement(partie);
         }
-
-        Sleep(10);
+        portableSleep(10);
     }
     return res;
 }
